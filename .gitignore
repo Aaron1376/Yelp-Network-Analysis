@@ -1,0 +1,13 @@
+# Yelp dataset files
+yelp_academic_dataset_*.json
+
+# Generated CSV files
+santa_barbara_*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook
+.ipynb_checkpoints

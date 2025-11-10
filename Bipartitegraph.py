@@ -5,32 +5,33 @@ from collections import defaultdict
 
 def load_data():
     """
-    Load the Santa Barbara businesses, reviews, and users data
+    Load the Santa Barbara restaurants, restaurant reviews, and users data
     """
-    reviews_df = pd.read_csv('santa_barbara_reviews.csv')
+    restaurants_df = pd.read_csv('santa_barbara_restaurants.csv')
+    reviews_df = pd.read_csv('santa_barbara_restaurant_reviews.csv')
     users_df = pd.read_csv('santa_barbara_users.csv')
-    return reviews_df, users_df
+    return restaurants_df, reviews_df, users_df
 
 def create_user_business_mapping(reviews_df):
     """
-    Create a mapping of businesses to their reviewers
+    Create a mapping of restaurants to their reviewers
     """
-    business_to_users = defaultdict(set)
+    restaurant_to_users = defaultdict(set)
     for _, review in reviews_df.iterrows():
-        business_to_users[review['business_id']].add(review['user_id'])
-    return business_to_users
+        restaurant_to_users[review['business_id']].add(review['user_id'])
+    return restaurant_to_users
 
-def create_user_network(business_to_users):
+def create_user_network(restaurant_to_users):
     """
-    Create a network where users are connected if they reviewed the same business
+    Create a network where users are connected if they reviewed the same restaurant
     """
     G = nx.Graph()
     
-    # Add edges between users who reviewed the same business
-    for business_id, users in business_to_users.items():
+    # Add edges between users who reviewed the same restaurant
+    for restaurant_id, users in restaurant_to_users.items():
         # Convert users set to list for indexing
         users_list = list(users)
-        # Add edges between all pairs of users who reviewed this business
+        # Add edges between all pairs of users who reviewed this restaurant
         for i in range(len(users_list)):
             for j in range(i + 1, len(users_list)):
                 user1, user2 = users_list[i], users_list[j]
@@ -76,7 +77,7 @@ def analyze_network(G):
         largest_cc = max(nx.connected_components(G), key=len)
         print(f"Size of largest connected component: {len(largest_cc):,} users")
 
-def visualize_network(G, output_file='user_network.png'):
+def visualize_network(G, output_file='restaurant_user_network.png'):
     """
     Create and save a visualization of the network
     Only visualize a subset of the network if it's too large
@@ -103,7 +104,7 @@ def visualize_network(G, output_file='user_network.png'):
     nx.draw_networkx_edges(H, pos, width=[w/max(weights) for w in weights], 
                           alpha=0.5, edge_color='gray')
     
-    plt.title("User Network in Santa Barbara\n(Users connected by reviewing same businesses)")
+    plt.title("User Network in Santa Barbara Restaurants\n(Users connected by reviewing same restaurants)")
     plt.axis('off')
     plt.tight_layout()
     
@@ -114,16 +115,20 @@ def visualize_network(G, output_file='user_network.png'):
 
 def main():
     # Load the data
-    print("Loading data...")
-    reviews_df, users_df = load_data()
+    print("Loading restaurant data...")
+    restaurants_df, reviews_df, users_df = load_data()
     
-    # Create business to users mapping
-    print("Creating business to users mapping...")
-    business_to_users = create_user_business_mapping(reviews_df)
+    print(f"Loaded {len(restaurants_df):,} restaurants")
+    print(f"Loaded {len(reviews_df):,} restaurant reviews")
+    print(f"Loaded {len(users_df):,} users")
+    
+    # Create restaurant to users mapping
+    print("Creating restaurant to users mapping...")
+    restaurant_to_users = create_user_business_mapping(reviews_df)
     
     # Create the network
     print("Creating user network...")
-    G = create_user_network(business_to_users)
+    G = create_user_network(restaurant_to_users)
     
     # Analyze the network
     analyze_network(G)
@@ -135,8 +140,29 @@ def main():
     # Save the network data
     print("\nSaving network data...")
     # Save edge list with weights
-    nx.write_weighted_edgelist(G, "user_network.edgelist")
-    print("Network data saved as 'user_network.edgelist'")
+    nx.write_weighted_edgelist(G, "restaurant_user_network.edgelist")
+    print("Network data saved as 'restaurant_user_network.edgelist'")
+    
+    # Additional restaurant-specific analysis
+    print("\n" + "="*60)
+    print("RESTAURANT-SPECIFIC ANALYSIS")
+    print("="*60)
+    
+    # Find restaurants with most shared reviewers
+    shared_reviewers = {}
+    restaurant_names = dict(zip(restaurants_df['business_id'], restaurants_df['name']))
+    
+    for restaurant_id, users in restaurant_to_users.items():
+        if len(users) > 1:  # Only consider restaurants with multiple reviewers
+            shared_reviewers[restaurant_id] = len(users)
+    
+    top_shared = sorted(shared_reviewers.items(), key=lambda x: x[1], reverse=True)[:10]
+    print("\nTop 10 restaurants by number of reviewers:")
+    for i, (restaurant_id, user_count) in enumerate(top_shared, 1):
+        name = restaurant_names.get(restaurant_id, "Unknown")
+        print(f"{i:2d}. {name:<35} {user_count:>4} reviewers")
+    
+    return G, restaurants_df, reviews_df, users_df
 
 if __name__ == "__main__":
     main()

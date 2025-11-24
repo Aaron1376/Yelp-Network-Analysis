@@ -231,6 +231,74 @@ def filter_users_for_reviews(user_file_path, user_ids):
         return pd.DataFrame()
 
 
+def filter_restaurants_from_businesses(businesses_df, output_file='santa_barbara_restaurants.csv'):
+    """
+    Filter businesses to only include restaurants based on categories.
+    
+    Args:
+        businesses_df (pd.DataFrame): DataFrame containing all businesses
+        output_file (str): Path to save the filtered restaurants CSV
+        
+    Returns:
+        pd.DataFrame: DataFrame containing only restaurants
+    """
+    if businesses_df.empty:
+        print("No business data provided")
+        return pd.DataFrame()
+    
+    # Restaurant-related keywords to search for in categories
+    restaurant_keywords = [
+        'restaurants', 'restaurant', 'food', 'dining',
+        'mexican', 'italian', 'chinese', 'japanese', 'thai', 'vietnamese',
+        'american (new)', 'american (traditional)', 'french', 'indian',
+        'mediterranean', 'seafood', 'steakhouses', 'pizza', 'burgers',
+        'sandwiches', 'delis', 'cafes', 'breakfast & brunch',
+        'fast food', 'caterers', 'buffets', 'diners',
+        'asian fusion', 'latin american', 'middle eastern',
+        'vegetarian', 'vegan', 'gluten-free'
+    ]
+    
+    restaurants = []
+    
+    for _, business in businesses_df.iterrows():
+        categories = business.get('categories', '')
+        if categories and isinstance(categories, str):
+            # Convert to lowercase for case-insensitive matching
+            categories_lower = categories.lower()
+            
+            # Check if any restaurant keyword is in the categories
+            is_restaurant = any(keyword in categories_lower for keyword in restaurant_keywords)
+            
+            if is_restaurant:
+                restaurants.append(business)
+    
+    restaurants_df = pd.DataFrame(restaurants)
+    
+    print(f"\nRestaurant Filtering Results:")
+    print(f"Total businesses: {len(businesses_df):,}")
+    print(f"Restaurants found: {len(restaurants_df):,}")
+    print(f"Percentage of restaurants: {(len(restaurants_df)/len(businesses_df)*100):.1f}%")
+    
+    if not restaurants_df.empty:
+        # Save to CSV
+        restaurants_df.to_csv(output_file, index=False)
+        print(f"Restaurants saved to: {output_file}")
+        
+        # Show top restaurant categories
+        print(f"\nTop restaurant categories:")
+        all_categories = []
+        for cats in restaurants_df['categories'].dropna():
+            if cats:
+                all_categories.extend([c.strip() for c in cats.split(',')])
+        
+        category_counts = Counter(all_categories)
+        for category, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:15]:
+            percentage = (count / len(restaurants_df)) * 100
+            print(f"  {category}: {count} ({percentage:.1f}%)")
+    
+    return restaurants_df
+
+
 # =============================================================================
 # DATA ANALYSIS AND PROCESSING FUNCTIONS
 # =============================================================================
@@ -430,6 +498,58 @@ def main():
         print("\nNo businesses found in Santa Barbara")
 
 
+def main_restaurants():
+    """
+    Main function to process restaurants specifically from Santa Barbara data
+    """
+    print("Starting restaurant data processing...")
+    
+    # First, get all Santa Barbara businesses
+    sb_df = parse_santa_barbara_businesses('yelp_academic_dataset_business.json')
+    if not sb_df.empty:
+        print(f"Found {len(sb_df):,} businesses in Santa Barbara")
+        
+        # Filter for restaurants
+        restaurants_df = filter_restaurants_from_businesses(sb_df)
+        
+        if not restaurants_df.empty:
+            # Get restaurant business IDs
+            restaurant_ids = set(restaurants_df['business_id'])
+            
+            # Filter reviews for restaurants
+            print("\nFiltering reviews for restaurants...")
+            restaurant_reviews_df = filter_reviews_for_businesses(
+                'yelp_academic_dataset_review.json', 
+                restaurant_ids
+            )
+            
+            if not restaurant_reviews_df.empty:
+                save_data_to_csv(restaurant_reviews_df, 'santa_barbara_restaurant_reviews.csv')
+                
+                # Get user IDs from restaurant reviews
+                user_ids = set(restaurant_reviews_df['user_id'])
+                print(f"Found {len(user_ids):,} unique users who reviewed restaurants")
+                
+                # Filter users who reviewed restaurants
+                print("\nFiltering user data for restaurant reviewers...")
+                restaurant_users_df = filter_users_for_reviews(
+                    'yelp_academic_dataset_user.json', 
+                    user_ids
+                )
+                
+                if not restaurant_users_df.empty:
+                    save_data_to_csv(restaurant_users_df, 'santa_barbara_restaurant_users.csv')
+                    process_user_data(restaurant_users_df)
+                else:
+                    print("No user data found for restaurant reviewers")
+            else:
+                print("No reviews found for restaurants")
+        else:
+            print("No restaurants found in Santa Barbara data")
+    else:
+        print("No businesses found in Santa Barbara")
+
+
 # =============================================================================
 # SCRIPT EXECUTION
 # =============================================================================
@@ -441,7 +561,7 @@ if __name__ == "__main__":
     
     # Uncomment the following lines to run full data extraction and processing:
     # print("\n" + "="*50)
-    # print("EXTRACTING AND PROCESSING DATA")
+    # print("EXTRACTING AND PROCESSING ALL DATA")
     # print("="*50)
     # main()
     
@@ -451,17 +571,11 @@ if __name__ == "__main__":
     # print("="*50)
     # analyze_categories()
     
-    # Filter and save restaurant data only
+    # Process restaurant data specifically
     print("\n" + "="*50)
-    print("FILTERING RESTAURANTS")
+    print("PROCESSING RESTAURANT DATA")
     print("="*50)
-    restaurants_df = filter_restaurants()
-    
-    # Filter reviews for restaurants
-    print("\n" + "="*50)
-    print("FILTERING REVIEWS FOR RESTAURANTS")
-    print("="*50)
-    restaurant_reviews_df = filter_reviews_for_restaurants()
+    main_restaurants()
     
     print("\n" + "="*60)
     print("PROCESSING COMPLETE")
